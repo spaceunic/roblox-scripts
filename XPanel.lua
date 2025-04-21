@@ -31,6 +31,10 @@ local SpinSpeed = 10
 local FlySpeed = 2
 local SpeedMultiplier = 5
 local KillAuraRange = 15
+local SpinSpeed = 10
+
+-- Variáveis para configurações
+local ConfigVisible = false
 
 -- Variáveis para animações
 local AnimationSpeed = 0.3
@@ -265,6 +269,7 @@ end
 local MovementTab = CreateTab("Movimento", 1)
 local CombatTab = CreateTab("Ataque", 2)
 local UtilityTab = CreateTab("Utilitários", 3)
+local ConfigTab = CreateTab("Config", 4)
 
 -- Função para criar botões modernos
 local function CreateButton(name, parent, layoutOrder)
@@ -340,6 +345,7 @@ local SpinButton = CreateButton("Spin", CombatTab, 3)
 
 -- Aba de Utilitários
 local InvisibleButton = CreateButton("Invisível", UtilityTab, 1)
+local ConfigButton = CreateButton("Configurações", UtilityTab, 2)
 
 -- Funções para cada feature
 -- NoClip
@@ -351,10 +357,12 @@ local function ToggleNoClip()
     local colorTween = CreateTween(NoClipButton, {BackgroundColor3 = targetColor})
     colorTween:Play()
     
-    if NoClipEnabled then
-        -- Conexão NoClip
+    -- Atualizar ícone de status
+    UpdateStatusIcons("NoClip", NoClipEnabled)
+    
+    if NoClipEnabled and not NoClipConnection then
         NoClipConnection = RunService.Stepped:Connect(function()
-            if Character and Character:FindFirstChild("Humanoid") then
+            if Character then
                 for _, part in pairs(Character:GetDescendants()) do
                     if part:IsA("BasePart") then
                         part.CanCollide = false
@@ -362,11 +370,13 @@ local function ToggleNoClip()
                 end
             end
         end)
+        UpdateStatus("NoClip ativado")
     else
         -- Desconectar NoClip
         if NoClipConnection then
             NoClipConnection:Disconnect()
             NoClipConnection = nil
+            UpdateStatus("NoClip desativado")
         end
     end
 end
@@ -380,21 +390,30 @@ local function ToggleInvisible()
     local colorTween = CreateTween(InvisibleButton, {BackgroundColor3 = targetColor})
     colorTween:Play()
     
+    -- Atualizar ícone de status
+    UpdateStatusIcons("Invisível", InvisibleEnabled)
+    
     if InvisibleEnabled then
-        -- Guardar posição e criar parte invisível
+        -- Salvar posição original
         OriginalPosition = HumanoidRootPart.CFrame
+        
+        -- Criar parte invisível para ficar
         InvisiblePart = Instance.new("Part")
+        InvisiblePart.Name = "InvisiblePart"
         InvisiblePart.Size = Vector3.new(5, 1, 5)
         InvisiblePart.Anchored = true
-        InvisiblePart.CanCollide = true
+        InvisiblePart.CanCollide = false
         InvisiblePart.Transparency = 1
-        InvisiblePart.Position = Vector3.new(9999, 9999, 9999)
+        InvisiblePart.Position = HumanoidRootPart.Position - Vector3.new(0, 3, 0)
         InvisiblePart.Parent = workspace
         
+        -- Teleportar para longe
         HumanoidRootPart.CFrame = CFrame.new(9999, 9999, 9999)
+        
+        UpdateStatus("Modo invisível ativado")
     else
-        -- Restaurar posição e remover parte
-        if OriginalPosition and HumanoidRootPart then
+        -- Restaurar posição
+        if OriginalPosition then
             HumanoidRootPart.CFrame = OriginalPosition
         end
         
@@ -402,6 +421,8 @@ local function ToggleInvisible()
             InvisiblePart:Destroy()
             InvisiblePart = nil
         end
+        
+        UpdateStatus("Modo invisível desativado")
     end
 end
 
@@ -414,6 +435,9 @@ local function ToggleCtrlClickTP()
     local colorTween = CreateTween(CtrlClickTPButton, {BackgroundColor3 = targetColor})
     colorTween:Play()
     
+    -- Atualizar ícone de status
+    UpdateStatusIcons("CtrlClickTP", CtrlClickTPEnabled)
+    
     if CtrlClickTPEnabled and not CtrlClickConnection then
         CtrlClickConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
             if input.UserInputType == Enum.UserInputType.MouseButton1 and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
@@ -423,10 +447,12 @@ local function ToggleCtrlClickTP()
                 end
             end
         end)
+        UpdateStatus("CtrlClickTP ativado - Segure CTRL e clique para teleportar")
     else
         if CtrlClickConnection then
             CtrlClickConnection:Disconnect()
             CtrlClickConnection = nil
+            UpdateStatus("CtrlClickTP desativado")
         end
     end
 end
@@ -441,17 +467,25 @@ local function ToggleSpin()
     colorTween:Play()
     
     if SpinEnabled and not SpinConnection then
-        local RotationAngle = 0
+        -- Inicializar ângulo de rotação
+        local rotationAngle = 0
+        
         SpinConnection = RunService.Heartbeat:Connect(function(dt)
             if Character and HumanoidRootPart then
-                RotationAngle = RotationAngle + dt * SpinSpeed
-                HumanoidRootPart.CFrame = CFrame.new(HumanoidRootPart.Position) * CFrame.Angles(0, RotationAngle, 0)
+                -- Incrementar o ângulo baseado na velocidade configurada
+                rotationAngle = rotationAngle + (dt * SpinSpeed)
+                
+                -- Aplicar rotação
+                HumanoidRootPart.CFrame = CFrame.new(HumanoidRootPart.Position) * CFrame.Angles(0, rotationAngle, 0)
             end
         end)
+        
+        UpdateStatus("Spin ativado - Velocidade: " .. SpinSpeed)
     else
         if SpinConnection then
             SpinConnection:Disconnect()
             SpinConnection = nil
+            UpdateStatus("Spin desativado")
         end
     end
 end
@@ -491,15 +525,15 @@ local function ToggleFling()
     end
 end
 
--- Conectar funções aos botões
-NoClipButton.MouseButton1Click:Connect(ToggleNoClip)
-InvisibleButton.MouseButton1Click:Connect(ToggleInvisible)
-CtrlClickTPButton.MouseButton1Click:Connect(ToggleCtrlClickTP)
-SpinButton.MouseButton1Click:Connect(ToggleSpin)
-FlingButton.MouseButton1Click:Connect(ToggleFling)
-FlyButton.MouseButton1Click:Connect(ToggleFly)
-SpeedButton.MouseButton1Click:Connect(ToggleSpeed)
-KillAuraButton.MouseButton1Click:Connect(ToggleKillAura)
+-- Conectar funções aos botões com tratamento de erros
+NoClipButton.MouseButton1Click:Connect(SafeCallback(ToggleNoClip, "Erro ao ativar NoClip"))
+InvisibleButton.MouseButton1Click:Connect(SafeCallback(ToggleInvisible, "Erro ao ativar Invisível"))
+CtrlClickTPButton.MouseButton1Click:Connect(SafeCallback(ToggleCtrlClickTP, "Erro ao ativar CtrlClickTP"))
+SpinButton.MouseButton1Click:Connect(SafeCallback(ToggleSpin, "Erro ao ativar Spin"))
+FlingButton.MouseButton1Click:Connect(SafeCallback(ToggleFling, "Erro ao ativar Fling"))
+FlyButton.MouseButton1Click:Connect(SafeCallback(ToggleFly, "Erro ao ativar Fly"))
+SpeedButton.MouseButton1Click:Connect(SafeCallback(ToggleSpeed, "Erro ao ativar Speed"))
+KillAuraButton.MouseButton1Click:Connect(SafeCallback(ToggleKillAura, "Erro ao ativar KillAura"))
 
 -- Função para atualizar character se mudar
 LocalPlayer.CharacterAdded:Connect(function(newCharacter)
@@ -526,6 +560,9 @@ local function ToggleFly()
     local colorTween = CreateTween(FlyButton, {BackgroundColor3 = targetColor})
     colorTween:Play()
     
+    -- Atualizar ícone de status
+    UpdateStatusIcons("Fly", FlyEnabled)
+    
     if FlyEnabled and not FlyConnection then
         -- Desativar gravidade
         if Humanoid then
@@ -534,6 +571,13 @@ local function ToggleFly()
             Humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
             Humanoid:SetStateEnabled(Enum.HumanoidStateType.Landed, false)
             Humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, false)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, false)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics, false)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.StrafingNoPhysics, false)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
             Humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
             Humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
             Humanoid:ChangeState(Enum.HumanoidStateType.Swimming)
@@ -569,6 +613,8 @@ local function ToggleFly()
                 end
             end
         end)
+        
+        UpdateStatus("Fly ativado - Velocidade: " .. FlySpeed .. " (WASD + Espaço/Shift)")
     else
         -- Restaurar estados
         if Humanoid then
@@ -577,6 +623,13 @@ local function ToggleFly()
             Humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
             Humanoid:SetStateEnabled(Enum.HumanoidStateType.Landed, true)
             Humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, true)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, true)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, true)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics, true)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.StrafingNoPhysics, true)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
             Humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
             Humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
         end
@@ -584,6 +637,7 @@ local function ToggleFly()
         if FlyConnection then
             FlyConnection:Disconnect()
             FlyConnection = nil
+            UpdateStatus("Fly desativado")
         end
     end
 end
@@ -597,6 +651,9 @@ local function ToggleSpeed()
     local colorTween = CreateTween(SpeedButton, {BackgroundColor3 = targetColor})
     colorTween:Play()
     
+    -- Atualizar ícone de status
+    UpdateStatusIcons("Speed", SpeedEnabled)
+    
     if SpeedEnabled and not SpeedConnection then
         -- Guardar velocidade original
         local originalWalkSpeed = Humanoid.WalkSpeed
@@ -609,6 +666,8 @@ local function ToggleSpeed()
                 Character:FindFirstChildOfClass("Humanoid").WalkSpeed = originalWalkSpeed * SpeedMultiplier
             end
         end)
+        
+        UpdateStatus("Speed ativado - Multiplicador: " .. SpeedMultiplier)
     else
         -- Restaurar velocidade
         if Humanoid then
@@ -618,6 +677,7 @@ local function ToggleSpeed()
         if SpeedConnection then
             SpeedConnection:Disconnect()
             SpeedConnection = nil
+            UpdateStatus("Speed desativado")
         end
     end
 end
@@ -631,7 +691,13 @@ local function ToggleKillAura()
     local colorTween = CreateTween(KillAuraButton, {BackgroundColor3 = targetColor})
     colorTween:Play()
     
+    -- Atualizar ícone de status
+    UpdateStatusIcons("KillAura", KillAuraEnabled)
+    
     if KillAuraEnabled and not KillAuraConnection then
+        -- Variável para contar hits
+        local hitCount = 0
+        
         KillAuraConnection = RunService.Heartbeat:Connect(function()
             if Character and HumanoidRootPart then
                 -- Procurar por jogadores próximos
@@ -647,9 +713,10 @@ local function ToggleKillAura()
                             if distance <= KillAuraRange and playerHumanoid.Health > 0 then
                                 -- Tentar danificar o jogador
                                 -- Método 1: Usando RemoteEvents (depende do jogo)
-                                local damageRemote = playerCharacter:FindFirstChild("DamageRemote")
+                                local damageRemote = Character:FindFirstChild("DamageRemote") or game:GetService("ReplicatedStorage"):FindFirstChild("DamageRemote")
                                 if damageRemote and damageRemote:IsA("RemoteEvent") then
                                     damageRemote:FireServer()
+                                    hitCount = hitCount + 1
                                 end
                                 
                                 -- Método 2: Usando ferramentas (depende do jogo)
@@ -658,6 +725,7 @@ local function ToggleKillAura()
                                         local handle = tool.Handle
                                         firetouchinterest(handle, playerHRP, 0)
                                         firetouchinterest(handle, playerHRP, 1)
+                                        hitCount = hitCount + 1
                                     end
                                 end
                             end
@@ -666,15 +734,27 @@ local function ToggleKillAura()
                 end
             end
         end)
+        
+        UpdateStatus("KillAura ativado - Alcance: " .. KillAuraRange)
+        
+        -- Atualizar contador de hits a cada 5 segundos
+        spawn(function()
+            while KillAuraEnabled and KillAuraConnection do
+                wait(5)
+                if hitCount > 0 then
+                    UpdateStatus("KillAura - " .. hitCount .. " hits detectados")
+                    hitCount = 0
+                end
+            end
+        end)
     else
         if KillAuraConnection then
             KillAuraConnection:Disconnect()
             KillAuraConnection = nil
+            UpdateStatus("KillAura desativado")
         end
     end
 end
-
--- Adicionar um indicador de status
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Name = "StatusLabel"
 StatusLabel.Size = UDim2.new(1, -20, 0, 30)
@@ -687,6 +767,62 @@ StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
 StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.TextSize = 14
 StatusLabel.Parent = MainFrame
+
+-- Adicionar ícone de status para funções ativas
+local ActiveFeaturesFrame = Instance.new("Frame")
+ActiveFeaturesFrame.Name = "ActiveFeatures"
+ActiveFeaturesFrame.Size = UDim2.new(1, -20, 0, 30)
+ActiveFeaturesFrame.Position = UDim2.new(0, 10, 1, -80)
+ActiveFeaturesFrame.BackgroundTransparency = 1
+ActiveFeaturesFrame.Parent = MainFrame
+
+-- Layout para ícones de status
+local IconLayout = Instance.new("UIListLayout")
+IconLayout.FillDirection = Enum.FillDirection.Horizontal
+IconLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+IconLayout.SortOrder = Enum.SortOrder.LayoutOrder
+IconLayout.Padding = UDim.new(0, 5)
+IconLayout.Parent = ActiveFeaturesFrame
+
+-- Função para criar ícones de status
+local statusIcons = {}
+local function CreateStatusIcon(name, color)
+    local icon = Instance.new("Frame")
+    icon.Name = name .. "Icon"
+    icon.Size = UDim2.new(0, 15, 0, 15)
+    icon.BackgroundColor3 = color or Color3.fromRGB(60, 180, 60)
+    icon.BorderSizePixel = 0
+    icon.Visible = false
+    
+    local iconCorner = Instance.new("UICorner")
+    iconCorner.CornerRadius = UDim.new(0, 7.5)
+    iconCorner.Parent = icon
+    
+    local iconLabel = Instance.new("TextLabel")
+    iconLabel.Size = UDim2.new(0, 0, 1, 0)
+    iconLabel.Position = UDim2.new(1, 5, 0, 0)
+    iconLabel.BackgroundTransparency = 1
+    iconLabel.Text = name
+    iconLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    iconLabel.TextSize = 12
+    iconLabel.Font = Enum.Font.Gotham
+    iconLabel.TextXAlignment = Enum.TextXAlignment.Left
+    iconLabel.Parent = icon
+    
+    icon.Parent = ActiveFeaturesFrame
+    statusIcons[name] = icon
+    return icon
+end
+
+-- Criar ícones para cada função
+CreateStatusIcon("NoClip", Color3.fromRGB(255, 100, 100))
+CreateStatusIcon("Invisível", Color3.fromRGB(100, 100, 255))
+CreateStatusIcon("CtrlClickTP", Color3.fromRGB(255, 200, 100))
+CreateStatusIcon("Spin", Color3.fromRGB(200, 100, 255))
+CreateStatusIcon("Fling", Color3.fromRGB(255, 100, 200))
+CreateStatusIcon("Fly", Color3.fromRGB(100, 200, 255))
+CreateStatusIcon("Speed", Color3.fromRGB(100, 255, 200))
+CreateStatusIcon("KillAura", Color3.fromRGB(255, 50, 50))
 
 -- Cantos arredondados para o status
 local StatusCorner = Instance.new("UICorner")
@@ -718,6 +854,25 @@ local function UpdateStatus(text, color)
         }, 0.5)
         fadeTween:Play()
     end)
+end
+
+-- Função para atualizar ícones de status
+local function UpdateStatusIcons(name, enabled)
+    if statusIcons[name] then
+        statusIcons[name].Visible = enabled
+    end
+end
+
+-- Função para tratamento de erros
+local function SafeCallback(callback, errorMsg)
+    return function(...)
+        local success, result = pcall(callback, ...)
+        if not success then
+            warn("XPanel Error: " .. tostring(result))
+            UpdateStatus(errorMsg or "Erro ao executar função", Color3.fromRGB(255, 100, 100))
+        end
+        return success, result
+    end
 end
 
 -- Botão para fechar o painel
@@ -762,6 +917,136 @@ CloseButton.MouseButton1Click:Connect(function()
         if KillAuraEnabled then ToggleKillAura() end
     end)
 end)
+
+-- Função para criar sliders
+local function CreateSlider(name, parent, layoutOrder, min, max, defaultValue, callback)
+    local SliderFrame = Instance.new("Frame")
+    SliderFrame.Name = name .. "SliderFrame"
+    SliderFrame.Size = UDim2.new(0, 260, 0, 50)
+    SliderFrame.BackgroundTransparency = 1
+    SliderFrame.LayoutOrder = layoutOrder
+    SliderFrame.Parent = parent
+    
+    local SliderLabel = Instance.new("TextLabel")
+    SliderLabel.Name = "Label"
+    SliderLabel.Size = UDim2.new(1, 0, 0, 20)
+    SliderLabel.BackgroundTransparency = 1
+    SliderLabel.Text = name
+    SliderLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SliderLabel.Font = Enum.Font.Gotham
+    SliderLabel.TextSize = 14
+    SliderLabel.TextXAlignment = Enum.TextXAlignment.Left
+    SliderLabel.Parent = SliderFrame
+    
+    local SliderValueLabel = Instance.new("TextLabel")
+    SliderValueLabel.Name = "Value"
+    SliderValueLabel.Size = UDim2.new(0, 40, 0, 20)
+    SliderValueLabel.Position = UDim2.new(1, -40, 0, 0)
+    SliderValueLabel.BackgroundTransparency = 1
+    SliderValueLabel.Text = tostring(defaultValue)
+    SliderValueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SliderValueLabel.Font = Enum.Font.Gotham
+    SliderValueLabel.TextSize = 14
+    SliderValueLabel.Parent = SliderFrame
+    
+    local SliderBack = Instance.new("Frame")
+    SliderBack.Name = "Back"
+    SliderBack.Size = UDim2.new(1, 0, 0, 10)
+    SliderBack.Position = UDim2.new(0, 0, 0, 30)
+    SliderBack.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    SliderBack.BorderSizePixel = 0
+    SliderBack.Parent = SliderFrame
+    
+    local SliderBackCorner = Instance.new("UICorner")
+    SliderBackCorner.CornerRadius = UDim.new(0, 5)
+    SliderBackCorner.Parent = SliderBack
+    
+    local SliderFill = Instance.new("Frame")
+    SliderFill.Name = "Fill"
+    SliderFill.Size = UDim2.new((defaultValue - min) / (max - min), 0, 1, 0)
+    SliderFill.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
+    SliderFill.BorderSizePixel = 0
+    SliderFill.Parent = SliderBack
+    
+    local SliderFillCorner = Instance.new("UICorner")
+    SliderFillCorner.CornerRadius = UDim.new(0, 5)
+    SliderFillCorner.Parent = SliderFill
+    
+    local SliderButton = Instance.new("TextButton")
+    SliderButton.Name = "Button"
+    SliderButton.Size = UDim2.new(1, 0, 1, 0)
+    SliderButton.BackgroundTransparency = 1
+    SliderButton.Text = ""
+    SliderButton.Parent = SliderBack
+    
+    local value = defaultValue
+    
+    local function updateSlider(input)
+        local sizeX = math.clamp((input.Position.X - SliderBack.AbsolutePosition.X) / SliderBack.AbsoluteSize.X, 0, 1)
+        SliderFill.Size = UDim2.new(sizeX, 0, 1, 0)
+        
+        value = min + ((max - min) * sizeX)
+        value = math.floor(value * 10) / 10 -- Arredondar para 1 casa decimal
+        SliderValueLabel.Text = tostring(value)
+        
+        if callback then
+            callback(value)
+        end
+    end
+    
+    SliderButton.MouseButton1Down:Connect(function(input)
+        local connection
+        connection = RunService.Heartbeat:Connect(function()
+            updateSlider({Position = UserInputService:GetMouseLocation()})
+        end)
+        
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if connection then
+                    connection:Disconnect()
+                    connection = nil
+                end
+            end
+        end)
+    end)
+    
+    return SliderFrame, function() return value end
+ end
+
+-- Criar painel de configurações
+local FlySpeedSlider, GetFlySpeed = CreateSlider("Velocidade de Voo", ConfigTab, 1, 1, 10, FlySpeed, function(value)
+    FlySpeed = value
+    UpdateStatus("Velocidade de voo ajustada para: " .. value)
+end)
+
+local SpeedSlider, GetSpeedMultiplier = CreateSlider("Multiplicador de Velocidade", ConfigTab, 2, 1, 10, SpeedMultiplier, function(value)
+    SpeedMultiplier = value
+    UpdateStatus("Multiplicador de velocidade ajustado para: " .. value)
+    
+    -- Atualizar velocidade em tempo real se estiver ativo
+    if SpeedEnabled and Humanoid then
+        Humanoid.WalkSpeed = 16 * value
+    end
+end)
+
+local KillAuraRangeSlider, GetKillAuraRange = CreateSlider("Alcance do KillAura", ConfigTab, 3, 5, 30, KillAuraRange, function(value)
+    KillAuraRange = value
+    UpdateStatus("Alcance do KillAura ajustado para: " .. value)
+end)
+
+local SpinSpeedSlider, GetSpinSpeed = CreateSlider("Velocidade de Giro", ConfigTab, 4, 1, 30, SpinSpeed, function(value)
+    SpinSpeed = value
+    UpdateStatus("Velocidade de giro ajustada para: " .. value)
+end)
+
+-- Função para abrir configurações
+local function ToggleConfig()
+    SwitchTab("Config")
+    UpdateStatus("Painel de configurações aberto")
+end
+
+-- Conectar botão de configurações
+ConfigButton.MouseButton1Click:Connect(ToggleConfig)
 
 -- Mensagem de confirmação
 print("XPanel 2.0 carregado com sucesso!")
